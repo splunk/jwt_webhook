@@ -92,7 +92,7 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def do_GET(self):
-        self.write_response(405, {"success": False})
+        self.write_response(200, {"success": True})
 
     def do_HEAD(self):
         self.write_response(405, {"success": False})

@@ -25,7 +25,6 @@ import jwt
 import os, logging
 from splunk_helper import data_encryption
 from modular_input import ModularInput, Field, IntegerField, FilePathField
-from webhooks_input_app.flatten import flatten
 from splunklib.modularinput.event_writer import EventWriter
 from splunklib.modularinput.event import Event
 

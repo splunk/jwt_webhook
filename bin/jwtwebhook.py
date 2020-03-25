@@ -35,7 +35,6 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
     def handle_request(self):
         try:
             # Make the resulting data
-            #result = collections.OrderedDict()
             post_body = ""
             # Get the content-body
             content_len = int(self.headers.get('content-length', 0))
@@ -47,7 +46,6 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
                 
                 if self.server.secret is not None:
                     # decode body using jwt
-                    self.server.logger.info("The secret is not empty:" + self.server.secret)
                     try:
                         post_body = jwt.decode(encoded_post_body, self.server.secret, algorithms=['HS256'])
                     except jwt.ExpiredSignatureError:

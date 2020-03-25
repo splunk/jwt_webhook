@@ -57,7 +57,7 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
                     post_body = encoded_post_body
                 
             # Send Event to Splunk via event_writer
-            self.server.output_results(json.loads(post_body))
+            self.server.output_results(json.loads(post_body), self.client_address[0])
 
             # Send a 200 request noting that this worked
             self.write_response(200, {"success": True})
@@ -305,15 +305,16 @@ class JwtWebhooksInput(ModularInput, EventWriter):
                 path_re = None
 
             # Construct Splunk Event and Write to Splunk
-            def output_results(payload):
+            def output_results(payload, clientip):
                 event = Event(
-                data=json.dumps(payload),
-                time="%.3f" % time.time(),
-                index=index,
-                source=source,
-                sourcetype=sourcetype,
-                done=True,
-                unbroken=True
+                    data=json.dumps(payload),
+                    time="%.3f" % time.time(),
+                    index=index,
+                    host=clientip,
+                    source=host,
+                    sourcetype=sourcetype,
+                    done=True,
+                    unbroken=True
                 )
                 self.write_event(event)
 

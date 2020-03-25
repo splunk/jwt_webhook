@@ -25,7 +25,8 @@ import jwt
 import os, logging
 from splunk_helper import data_encryption
 from modular_input import ModularInput, Field, IntegerField, FilePathField
-from webhooks_input_app.flatten import flatten
+from splunklib.modularinput.event_writer import EventWriter
+from splunklib.modularinput.event import Event
 
 
 class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
@@ -33,8 +34,7 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
     def handle_request(self):
         try:
             # Make the resulting data
-            result = collections.OrderedDict()
-
+            post_body = ""
             # Get the content-body
             content_len = int(self.headers.get('content-length', 0))
 
@@ -42,7 +42,7 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
             if content_len > 0:
 
                 encoded_post_body = self.rfile.read(content_len)
-
+                
                 if self.server.secret is not None:
                     # decode body using jwt
                     try:
@@ -55,33 +55,14 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
                         return
                 else:
                     post_body = encoded_post_body
-
-                # Handle JSON
-                try:
-                    parsed_body = flatten(post_body)  # flatten(body_json)
-                except ValueError:
-                    # Could not parse output
-                    parsed_body = None
-
-                    if self.server.logger is not None:
-                        self.server.logger.warn("Content body could not be parsed as JSON")
-
-                # Include the data if we got some
-                if parsed_body is not None:
-                    result.update(parsed_body)
-
-            # Add the data regarding the query
-            result['command'] = self.command
-            result['client_address'] = self.client_address[0]
-            result['client_port'] = self.client_address[1]
-
-            # Output the result
-            self.server.output_results([result])
+                
+            # Send Event to Splunk via event_writer
+            self.server.output_results(json.loads(post_body), self.client_address[0])
 
             # Send a 200 request noting that this worked
             self.write_response(200, {"success": True})
         except Exception as ex:
-            self.server.logger.error("JWT web hook handle_request error: " + logging.exception(ex))
+            self.server.logger.error("JWT web hook handle_request error: %s", ex)
 
     def write_json(self, json_dict):
         content = json.dumps(json_dict)
@@ -205,7 +186,7 @@ class WebServer:
             self.server.socket.close()
 
 
-class JwtWebhooksInput(ModularInput):
+class JwtWebhooksInput(ModularInput, EventWriter):
     """
     The webhooks input modular input runs a web-server and pipes data from the requests to Splunk.
     """
@@ -236,6 +217,7 @@ class JwtWebhooksInput(ModularInput):
         ]
 
         ModularInput.__init__(self, scheme_args, args, logger_name="webhook_modular_input", sleep_interval=60)
+        EventWriter.__init__(self, output = sys.stdout, error = sys.stderr)
 
         if timeout > 0:
             self.timeout = timeout
@@ -281,7 +263,6 @@ class JwtWebhooksInput(ModularInput):
         client_id = stanza.split('://')[1]
         updated_item = {
             'port': port,
-            'secret': data_encryption.DataEncryption.masked_password,
             'password': data_encryption.DataEncryption.masked_password
         }
 
@@ -293,7 +274,11 @@ class JwtWebhooksInput(ModularInput):
 
         # get secret from encrypted location
         encrypt = data_encryption.DataEncryption(session_key, stanza)
-        secret = encrypt.encrypt_and_get_password(client_id, masked_secret, updated_item)
+        if masked_secret:
+            updated_item['secret'] = data_encryption.DataEncryption.masked_password
+            secret = encrypt.encrypt_and_get_password(client_id, masked_secret, updated_item)
+        else:
+            secret = None
         password = encrypt.encrypt_and_get_password(client_id + '_password', masked_password, updated_item)
 
         sourcetype = cleaned_params.get("sourcetype", "jwtwebhook")
@@ -319,13 +304,19 @@ class JwtWebhooksInput(ModularInput):
             else:
                 path_re = None
 
-            def output_results(results):
-                """
-                This function will get the web-server to output the results to Splunk.
-                """
-                for result in results:
-                    self.output_event(result, stanza, index=index, source=source, sourcetype=sourcetype, host=host,
-                                      unbroken=True, close=True)
+            # Construct Splunk Event and Write to Splunk
+            def output_results(payload, clientip):
+                event = Event(
+                    data=json.dumps(payload),
+                    time="%.3f" % time.time(),
+                    index=index,
+                    host=clientip,
+                    source=host,
+                    sourcetype=sourcetype,
+                    done=True,
+                    unbroken=True
+                )
+                self.write_event(event)
 
             # Start the web-server
             self.logger.info("Starting server on port=%r, path=%r, cert_file=%r, key_file=%r, stanza=%s, pid=%r", port,

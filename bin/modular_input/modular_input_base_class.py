@@ -697,7 +697,11 @@ class ModularInput(object):
 
             # Throw an exception if the argument could not be found
             else:
-                raise FieldValidationException("The parameter '%s' is not a valid argument" % (name))
+                # raise FieldValidationException("The parameter '%s' is not a valid argument" % (name))
+                # Should following Splunk global spec for inputs.conf.
+                # Usually call Splunk RESTful API to get all supported properties
+                # Just ignore it for this release
+                self.logger.debug("The parameter '{}' is not a valid argument".format(name))
 
         return cleaned_params
 

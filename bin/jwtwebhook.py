@@ -240,7 +240,7 @@ class JwtWebhooksInput(ModularInput, EventWriter):
 
     def do_shutdown(self):
 
-        for stanza, httpd in self.http_daemons.items():
+        for stanza, httpd in self.http_daemons.copy().items():
             httpd.stop_serving()
             del self.http_daemons[stanza]
 

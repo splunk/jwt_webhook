@@ -19,7 +19,7 @@ import time
 import re
 import json
 import errno
-import collections
+import traceback
 from threading import Thread
 import jwt
 import os, logging
@@ -62,7 +62,7 @@ class LogRequestsInSplunkHandler(BaseHTTPRequestHandler):
             # Send a 200 request noting that this worked
             self.write_response(200, {"success": True})
         except Exception as ex:
-            self.server.logger.error("JWT web hook handle_request error: %s", ex)
+            self.server.logger.error("JWT web hook handle_request error: %s", traceback.format_exc())
 
     def write_json(self, json_dict):
         content = json.dumps(json_dict)
